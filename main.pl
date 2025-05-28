@@ -120,7 +120,10 @@ get_garden(house(_, _, _, _, _, Garden, _, _, _), Garden).
 get_size(house(_, _, Size, _, _, _, _, _, _), Size).
 
 % ========== Χρήσιμα ==========
-house_info(H) :- house(A, B, C, D, E, F, G, H1, I), H = house(A, B, C, D, E, F, G, H1, I).
+house_info(
+    house(Address, Rooms, Size, Floor, Rent, Garden, Lift, Center, Pets)
+) :-
+    house(Address, Rooms, Size, Pets, Floor, Lift, Center, Garden, Rent).
 
 print_houses([]).
 print_houses([house(Address, R, S, F, Rent, Garden, Lift, Center, Pets)|T]) :-
