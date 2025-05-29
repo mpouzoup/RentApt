@@ -3,7 +3,6 @@
   Φοιτητής 1: Μπουζούκη Πολυξένη - 4535
   Φοιτητής 2: Παπαδοπούλου Ουρανία - 4499
   Περιγραφή: Πρόγραμμα για εύρεση διαμερισμάτων σύμφωνα με τις απαιτήσεις πελατών.
-  Περιέχει υλοποίηση των λειτουργιών: διαδραστική, μαζική και δημοπρασία.
 */
 
 :- dynamic house/9.
@@ -13,12 +12,13 @@
 :- ['requests'].
 
 % ========== Κύριο πρόγραμμα ==========
+
 run :-
     repeat,
     format('\nΜενού:\n======\n'),
     format('1 - Προτιμήσεις ενός πελάτη\n'),
     format('2 - Μαζικές προτιμήσεις πελατών\n'),
-    format('3 - Επιλογή πελατών μέσω δημοπρασίας\n'),
+    format('3 - Επιλογή πελατών μέσω δημοπρασίας (υπό υλοποίηση)\n'),
     format('0 - Έξοδος\n\n'),
     write('Επιλογή: '),
     read(Choice),
@@ -27,22 +27,23 @@ run :-
 
 handle_choice(1) :- interactive_mode, !.
 handle_choice(2) :- batch_mode, !.
-handle_choice(3) :- auction_mode, !.
+handle_choice(3) :- writeln('Η λειτουργία δημοπρασίας δεν έχει υλοποιηθεί ακόμα.'), !.
 handle_choice(0) :- writeln('Έξοδος από το πρόγραμμα.'), !.
-handle_choice(_) :- writeln('Μη έγκυρη επιλογή, προσπαθήστε ξανά.'), fail.
+handle_choice(_) :- writeln('Επίλεξε έναν αριθμό μεταξύ 0 έως 3!'), fail.
 
 % ========== Διαδραστική λειτουργία ==========
+
 interactive_mode :-
     format('\nΔώσε τις παρακάτω πληροφορίες:\n'),
     write('Ελάχιστο Εμβαδόν: '), read(MinSize),
     write('Ελάχιστος αριθμός υπνοδωματίων: '), read(MinRooms),
     write('Να επιτρέπονται κατοικίδια; (yes/no): '), read(Pets),
     write('Από ποιον όροφο και πάνω να υπάρχει ανελκυστήρας; '), read(FloorLimit),
-    write('Μέγιστο συνολικό ενοίκιο: '), read(MaxRent),
-    write('Μέγιστο ενοίκιο για σπίτι στο κέντρο: '), read(MaxCenter),
-    write('Μέγιστο ενοίκιο για σπίτι στα προάστια: '), read(MaxSuburb),
-    write('Επιπλέον €/m2 για παραπάνω εμβαδόν: '), read(ExtraPerM2),
-    write('Επιπλέον €/m2 για κήπο: '), read(ExtraPerGarden),
+    write('Ποιο είναι το μέγιστο ενοίκιο που μπορείς να πληρώσεις; '), read(MaxRent),
+    write('Πόσα θα έδινες για ένα διαμέρισμα στο κέντρο της πόλης (στα ελάχιστα τετραγωνικά); '), read(MaxCenter),
+    write('Πόσα θα έδινες για ένα διαμέρισμα στα προάστια της πόλης (στα ελάχιστα τετραγωνικά); '), read(MaxSuburb),
+    write('Πόσα θα έδινες για κάθε τετραγωνικό διαμερίσματος πάνω από το ελάχιστο; '), read(ExtraPerM2),
+    write('Πόσα θα έδινες για κάθε τετραγωνικό κήπου; '), read(ExtraPerGarden),
 
     Request = request(dummy, MinSize, MinRooms, Pets, FloorLimit, MaxRent, MaxCenter, MaxSuburb, ExtraPerM2, ExtraPerGarden),
 
@@ -59,34 +60,83 @@ interactive_mode :-
             format('\nΠροτείνεται η ενοικίαση του διαμερίσματος στην διεύθυνση: ~w\n', [Address])
     ).
 
-% ========== Έλεγχος συμβατότητας ==========
+% ========== Μαζική λειτουργία ==========
+
+batch_mode :-
+    findall(
+        request(Name, MinSize, MinRooms, Pets, FloorLimit, MaxRent, MaxCenter, MaxSuburb, ExtraPerM2, ExtraPerGarden),
+        request(Name, MinSize, MinRooms, Pets, FloorLimit, MaxRent, MaxCenter, MaxSuburb, ExtraPerM2, ExtraPerGarden),
+        Requests
+    ),
+    process_all_requests(Requests).
+
+process_all_requests([]).
+process_all_requests([Request|T]) :-
+    Request = request(Name, MinSize, MinRooms, Pets, FloorLimit, MaxRent, MaxCenter, MaxSuburb, ExtraPerM2, ExtraPerGarden),
+    format('\nΚατάλληλα διαμερίσματα για τον πελάτη: ~w:\n', [Name]),
+    findall(House, (house_info(House), compatible_house(Request, House)), AllHouses),
+    include(acceptable_offer(Request), AllHouses, SuitableHouses),
+
+    (
+        SuitableHouses = [] ->
+            writeln('Δεν υπάρχει κατάλληλο σπίτι!')
+        ;
+            print_houses(SuitableHouses),
+            find_best_house(SuitableHouses, house(Address, _, _, _, _, _, _, _, _)),
+            format('\nΠροτείνεται η ενοικίαση του διαμερίσματος στην διεύθυνση: ~w\n', [Address])
+    ),
+    process_all_requests(T).
+
+% ========== Εμφάνιση και επεξεργασία δεδομένων ==========
+
+house_info(
+    house(Address, Rooms, Size, Floor, Rent, Garden, Lift, Center, Pets)
+) :-
+    house(Address, Rooms, Size, Pets, Floor, Lift, Center, Garden, Rent).
+
+print_houses([]).
+print_houses([house(Address, R, S, F, Rent, Garden, Lift, Center, Pets)|T]) :-
+    format('\nΚατάλληλο σπίτι στην διεύθυνση: ~w\n', [Address]),
+    format('Υπνοδωμάτια: ~w\n', [R]),
+    format('Εμβαδόν: ~w\n', [S]),
+    format('Εμβαδόν κήπου: ~w\n', [Garden]),
+    format('Είναι στο κέντρο της πόλης: ~w\n', [Center]),
+    format('Επιτρέπονται κατοικίδια: ~w\n', [Pets]),
+    format('Όροφος: ~w\n', [F]),
+    format('Ανελκυστήρας: ~w\n', [Lift]),
+    format('Ενοίκιο: ~w\n', [Rent]),
+    print_houses(T).
+
+% ========== Συμβατότητα και προσφορές ==========
+
 compatible_house(
     request(_, MinSize, MinRooms, Pets, FloorLimit, _, _, _, _, _),
-    house(_, Rooms, Size, Floor, _, _, Lift, _, Pets)
+    house(_, Rooms, Size, Floor, _, _, Lift, _, HousePets)
 ) :-
     Size >= MinSize,
     Rooms >= MinRooms,
-    (Floor < FloorLimit ; Lift == yes),
-    true.
-
-% ========== Υπολογισμός Προσφοράς ==========
+    (Floor < FloorLimit -> true ; Lift == yes),
+    (Pets == yes -> HousePets == yes ; true).  % Εάν ο πελάτης θέλει κατοικίδια, το σπίτι πρέπει να τα επιτρέπει
 acceptable_offer(Request, House) :-
     offer(Request, House, Price),
     Request = request(_, _, _, _, _, MaxRent, _, _, _, _),
+    format('Debug: House ~w, Price ~w, MaxRent ~w~n', [House, Price, MaxRent]),  % Γραμμή για debugging
     Price =< MaxRent.
 
 offer(
-    request(_, MinSize, _, _, _, _, MaxCenter, MaxSuburb, ExtraPerM2, ExtraPerGarden),
-    house(_, _, Size, _, _, Garden, _, Center, _),
+    request(_, MinSize, _, _, _, MaxRent, MaxCenter, MaxSuburb, ExtraPerM2, ExtraPerGarden),
+    house(_, _, Size, _, Rent, Garden, _, Center, _),
     FinalRent
 ) :-
     (Center == yes -> Base is MaxCenter ; Base is MaxSuburb),
     ExtraSize is max(0, Size - MinSize),
     Extra1 is ExtraSize * ExtraPerM2,
     Extra2 is Garden * ExtraPerGarden,
-    FinalRent is Base + Extra1 + Extra2.
+    CalculatedRent is Base + Extra1 + Extra2,
+    % Η τελική τιμή δεν μπορεί να ξεπερνά το MaxRent ΟΥΤΕ το Rent του σπιτιού
+    FinalRent is min(CalculatedRent, min(MaxRent, Rent)).
+% ========== Επιλογή καλύτερου σπιτιού ==========
 
-% ========== Επιλογή Καλύτερου ==========
 find_best_house(Houses, Best) :-
     find_cheapest(Houses, CheapestList),
     find_biggest_garden(CheapestList, GardenList),
@@ -118,40 +168,3 @@ find_biggest_house(Houses, Result) :-
 get_rent(house(_, _, _, _, Rent, _, _, _, _), Rent).
 get_garden(house(_, _, _, _, _, Garden, _, _, _), Garden).
 get_size(house(_, _, Size, _, _, _, _, _, _), Size).
-
-% ========== Χρήσιμα ==========
-house_info(
-    house(Address, Rooms, Size, Floor, Rent, Garden, Lift, Center, Pets)
-) :-
-    house(Address, Rooms, Size, Pets, Floor, Lift, Center, Garden, Rent).
-
-print_houses([]).
-print_houses([house(Address, R, S, F, Rent, Garden, Lift, Center, Pets)|T]) :-
-    format('\nΚατάλληλο σπίτι στην διεύθυνση: ~w\nΥπνοδωμάτια: ~w\nΕμβαδόν: ~w\nΌροφος: ~w\nΕνοίκιο: ~w\nΚήπος: ~w\nΑνελκυστήρας: ~w\nΚέντρο: ~w\nΚατοικίδια: ~w\n',
-           [Address, R, S, F, Rent, Garden, Lift, Center, Pets]),
-    print_houses(T).
-
-batch_mode :-
-    findall(
-        request(Name, MinSize, MinRooms, Pets, FloorLimit, MaxRent, MaxCenter, MaxSuburb, ExtraPerM2, ExtraPerGarden),
-        request(Name, MinSize, MinRooms, Pets, FloorLimit, MaxRent, MaxCenter, MaxSuburb, ExtraPerM2, ExtraPerGarden),
-        Requests
-    ),
-    process_all_requests(Requests).
-
-process_all_requests([]).
-process_all_requests([request(Name, MinSize, MinRooms, Pets, FloorLimit, MaxRent, MaxCenter, MaxSuburb, ExtraPerM2, ExtraPerGarden)|T]) :-
-    format('\nΚατάλληλα διαμερίσματα για τον πελάτη: ~w:\n', [Name]),
-    Request = request(Name, MinSize, MinRooms, Pets, FloorLimit, MaxRent, MaxCenter, MaxSuburb, ExtraPerM2, ExtraPerGarden),
-    findall(House, (house_info(House), compatible_house(Request, House)), AllHouses),
-    include(acceptable_offer(Request), AllHouses, SuitableHouses),
-
-    (
-        SuitableHouses = [] ->
-            writeln('Δεν υπάρχει κατάλληλο σπίτι!')
-        ;
-            print_houses(SuitableHouses),
-            find_best_house(SuitableHouses, house(Address, _, _, _, _, _, _, _, _)),
-            format('\nΠροτείνεται η ενοικίαση του διαμερίσματος στην διεύθυνση: ~w\n', [Address])
-    ),
-    process_all_requests(T).
