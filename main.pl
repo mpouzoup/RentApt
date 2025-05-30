@@ -92,18 +92,18 @@ process_all_requests([Request|T]) :-
 house_info(
     house(Address, Rooms, Size, Floor, Rent, Garden, Lift, Center, Pets)
 ) :-
-    house(Address, Rooms, Size, Pets, Floor, Lift, Center, Garden, Rent).
+house(Address, Rooms, Size, Center, Floor, Lift, Pets, Garden, Rent).
 
 print_houses([]).
-print_houses([house(Address, R, S, F, Rent, Garden, Lift, Center, Pets)|T]) :-
+print_houses([house(Address, R, S, Center, F, Lift, Pets, Garden, Rent)|T]) :-
     format('\nΚατάλληλο σπίτι στην διεύθυνση: ~w\n', [Address]),
     format('Υπνοδωμάτια: ~w\n', [R]),
     format('Εμβαδόν: ~w\n', [S]),
-    format('Εμβαδόν κήπου: ~w\n', [Garden]),
     format('Είναι στο κέντρο της πόλης: ~w\n', [Center]),
-    format('Επιτρέπονται κατοικίδια: ~w\n', [Pets]),
     format('Όροφος: ~w\n', [F]),
     format('Ανελκυστήρας: ~w\n', [Lift]),
+    format('Επιτρέπονται κατοικίδια: ~w\n', [Pets]),
+    format('Εμβαδόν κήπου: ~w\n', [Garden]),
     format('Ενοίκιο: ~w\n', [Rent]),
     print_houses(T).
 
