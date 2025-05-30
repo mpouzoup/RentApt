@@ -27,7 +27,7 @@ run :-
 
 handle_choice(1) :- interactive_mode, !.
 handle_choice(2) :- batch_mode, !.
-handle_choice(3) :- writeln('Η λειτουργία δημοπρασίας δεν έχει υλοποιηθεί ακόμα.'), !.
+handle_choice(3) :- auction_mode , !.
 handle_choice(0) :- writeln('Έξοδος από το πρόγραμμα.'), !.
 handle_choice(_) :- writeln('Επίλεξε έναν αριθμό μεταξύ 0 έως 3!'), fail.
 
@@ -168,3 +168,64 @@ find_biggest_house(Houses, Result) :-
 get_rent(house(_, _, _, _, Rent, _, _, _, _), Rent).
 get_garden(house(_, _, _, _, _, Garden, _, _, _), Garden).
 get_size(house(_, _, Size, _, _, _, _, _, _), Size).
+
+auction_mode :-
+    writeln('Auction mode starting...'),
+    findall(
+        request(Name, MinSize, MinRooms, Pets, FloorLimit, MaxRent, MaxCenter, MaxSuburb, ExtraPerM2, ExtraPerGarden),
+        request(Name, MinSize, MinRooms, Pets, FloorLimit, MaxRent, MaxCenter, MaxSuburb, ExtraPerM2, ExtraPerGarden),
+        Requests
+    ),
+    findall(
+        house(Address, Rooms, Size, Pets, Floor, Lift, Center, Garden, Rent),
+        house(Address, Rooms, Size, Pets, Floor, Lift, Center, Garden, Rent),
+        Houses
+    ),
+    auction_allocate(Requests, Houses, [], Allocations),
+    print_allocations(Requests, Allocations).
+
+print_allocations([], _).
+print_allocations([request(Name, _, _, _, _, _, _, _, _, _)|Rest], Allocations) :-
+    ( member(allocation(Name, house(Address, _, _, _, _, _, _, _, _)), Allocations) ->
+        format('O πελάτης ~w θα νοικιάσει το διαμέρισμα στην διεύθυνση: ~w~n', [Name, Address])
+    ;
+        format('O πελάτης ~w δεν θα νοικιάσει κάποιο διαμέρισμα!~n', [Name])
+    ),
+    print_allocations(Rest, Allocations).
+
+% Ενημερωμένη υλοποίηση ώστε να καταγράφει και αποτυχίες
+
+auction_allocate([], _, Allocations, Allocations).
+auction_allocate([Request|Rest], Houses, TakenHouses, FinalAllocations) :-
+    Request = request(Name, MinSize, MinRooms, Pets, FloorLimit, MaxRent, StartRent, _, _, _),
+    exclude({TakenHouses}/[H]>>member(H, TakenHouses), Houses, RemainingHouses),
+    findall(House,
+        (
+            member(House, RemainingHouses),
+            House = house(_, HouseRooms, HouseSize, HousePets, HouseFloor, HouseLift, _, _, HouseRent),
+            HouseRooms >= MinRooms,
+            HouseSize >= MinSize,
+            (Pets == yes -> HousePets == yes ; true),
+            (HouseFloor < FloorLimit -> true ; HouseLift == yes),
+            HouseRent >= StartRent,
+            HouseRent =< MaxRent
+        ),
+        MatchingHouses
+    ),
+    sort(5, @=<, MatchingHouses, SortedHouses),
+    (
+        SortedHouses = [BestHouse|_] ->
+            auction_allocate(Rest, Houses, [BestHouse|TakenHouses], [allocation(Name, BestHouse)|Allocations])
+        ;
+            auction_allocate(Rest, Houses, TakenHouses, [allocation(Name, none)|Allocations])
+    ).
+
+% Εκτύπωση αποτελεσμάτων σε φιλική μορφή
+
+print_allocations([]).
+print_allocations([allocation(Name, none)|T]) :-
+    format('O πελάτης ~w δεν θα νοικιάσει κάποιο διαμέρισμα!\n', [Name]),
+    print_allocations(T).
+print_allocations([allocation(Name, house(Address, _, _, _, _, _, _, _, _))|T]) :-
+    format('O πελάτης ~w θα νοικιάσει το διαμέρισμα στην διεύθυνση: ~w\n', [Name, Address]),
+    print_allocations(T).
