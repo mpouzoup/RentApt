@@ -1,4 +1,10 @@
-﻿:- consult('houses.pl').
+﻿/*
+  ΟΜΑΔΑ:
+  Μπουζούκη Πολυξένη 4535
+  Παπαδοπούλου Ουρανία 4499
+*/
+% Φόρτωση των δεδομένων από τα αρχεία houses.pl και requests.pl
+:- consult('houses.pl').
 :- consult('requests.pl').
 
 run :-
@@ -13,12 +19,14 @@ run :-
     handle_choice(Choice),
     Choice == 0, !.
 
+% Χειρισμός των επιλογών του χρήστη
 handle_choice(0) :- writeln("Έξοδος..."), !.
 handle_choice(1) :- interactive_mode, !.
 handle_choice(2) :- batch_mode, !.
 handle_choice(3) :- auction_mode, !.
 handle_choice(_) :- writeln('Επίλεξε έναν αριθμό μεταξύ 0 έως 3!').
 
+% Λειτουργία 1: διαδραστική εισαγωγή προτιμήσεων πελάτη και εύρεση σπιτιών
 interactive_mode :-
     writeln("Δώσε τις παρακάτω πληροφορίες:\n=============================="),
     write("Ελάχιστο Εμβαδόν: "), read(MinArea),
@@ -32,6 +40,7 @@ interactive_mode :-
     write("Πόσα θα έδινες για κάθε τετραγωνικό κήπου; "), read(GardenPerSqM),
     
     nl,
+    % Βρίσκουμε όλα τα σπίτια που ικανοποιούν τις προτιμήσεις
     findall(
         house(Address, Rooms, Area, Center, Floor, Elevator, PetsAllowed, Garden, Rent),
         ( house(Address, Rooms, Area, Center, Floor, Elevator, PetsAllowed, Garden, Rent),
@@ -44,12 +53,14 @@ interactive_mode :-
         ),
         SuitableHouses
     ),
+    % Εμφάνιση κατάλληλων σπιτιών και πρόταση του καλύτερου
     show_suitable_houses(SuitableHouses), 
     recommend_best_house(SuitableHouses),
     nl.
 
-% -------------------- ΚΡΙΤΗΡΙΑ --------------------
+% ΚΡΙΤΗΡΙΑ ΕΠΙΛΟΓΗΣ
 
+% Ελέγχουμε αν ένα σπίτι ταιριάζει με τις προτιμήσεις του πελάτη
 matches_preferences(Rooms, Area, Center, Floor, Elevator, PetsAllowed, Garden, Rent,
                     MinRooms, MinArea, DesiredPets, ElevatorFrom,
                     BaseCenterRent, BaseSuburbRent,
@@ -61,18 +72,20 @@ matches_preferences(Rooms, Area, Center, Floor, Elevator, PetsAllowed, Garden, R
     PetsAllowed == DesiredPets,
     ( Floor < ElevatorFrom ; (Floor >= ElevatorFrom, Elevator == yes) ),
 
-    % Υπολογισμός αποδεκτής τιμής
+    % Βάση ενοικίου ανάλογα με το αν είναι στο κέντρο ή στα προάστια
     ExtraArea is Area - MinArea,
     ( Center == yes -> BaseRent = BaseCenterRent ; BaseRent = BaseSuburbRent ),
     ExtraAreaCost is ExtraArea * ExtraPerSqM,
     GardenCost is Garden * GardenPerSqM,
-    MaxAcceptable is BaseRent + ExtraAreaCost + GardenCost,
+    MaxAcceptable is BaseRent + ExtraAreaCost + GardenCost, %Μέγιστο αποδεκτό ενοίκιο με βάση τα κριτήρια και το μέγιστο όριο
 
-    % Πρέπει να πληροί και το άνω όριο και να καλύπτει το ενοίκιο του σπιτιού
+
+    % Το ενοίκιο του σπιτιού πρέπει να είναι μικρότερο και από τα δύο
     Rent =< MaxTotal,
     Rent =< MaxAcceptable.
 
-% -------------------- ΕΜΦΑΝΙΣΗ --------------------
+% ΕΜΦΑΝΙΣΗ ΚΑΤΑΛΛΗΛΩΝ ΣΠΙΤΙΩΝ
+
 show_suitable_houses(Houses) :-
     ( Houses == [] ->
         writeln("Δεν υπάρχει κατάλληλο σπίτι!")
@@ -125,14 +138,16 @@ recommend_best_house(Houses) :-
     FinalChoices = [house(Address, _, _, _, _, _, _, _, _)|_],
     format("Προτείνεται η ενοικίαση του διαμερίσματος στην διεύθυνση: ~w\n", [Address]).
 
+% ΛΕΙΤΟΥΡΓΙΑ 2: ΜΑΖΙΚΕΣ ΠΡΟΤΙΜΗΣΕΙΣ
+
+% Συγκεντρώνουμε όλες τις αιτήσεις πελατών από το requests.pl
 batch_mode :-
     findall(
         request(Name, MinArea, MinRooms, DesiredPets, ElevatorFrom, MaxTotal, BaseCenterRent, BaseSuburbRent, ExtraPerSqM, GardenPerSqM),
         request(Name, MinArea, MinRooms, DesiredPets, ElevatorFrom, MaxTotal, BaseCenterRent, BaseSuburbRent, ExtraPerSqM, GardenPerSqM),
         Requests
     ),
-    show_requests(Requests),
-    format("look", Requests).
+    show_requests(Requests).
 
 show_requests(Requests) :-
     ( Requests = [] ->
@@ -161,6 +176,10 @@ process_requests([request(Name, MinArea, MinRooms, DesiredPets, ElevatorFrom, Ma
     recommend_best_house(SuitableHouses),
     process_requests(Rest).
 
+% ΛΕΙΤΟΥΡΓΙΑ 3: ΔΗΜΟΠΡΑΣΙΑ
+
+% Απλή ιδέα για δημοπρασία: Για κάθε αίτηση βρίσκουμε σπίτια που πληρούν τα κριτήρια
+% και βρίσκουμε το σπίτι με τη μικρότερη τιμή ενοικίου που ικανοποιεί τη ζήτηση.
 auction_mode :-
     findall(Name,request(Name,_,_,_,_,_,_,_,_,_),Names), % Βρισκουμε ολα τα ονοματα πελατων
     auction_loop(Names, [],FinalAssignments), %Loop με ολους τους πελατες
@@ -221,7 +240,7 @@ find_compatible_houses(Customer,Houses) :-  % Βρισκουμε ολα τα δ�
          compatible_house(Customer,house(Address, Bedrooms, Size, Center, Floor, Elevator, PetsAllowed, Garden, Rent))),
         Houses).
 
-compatible_house(  %Ελεγχος compatibility
+compatible_house(  % Ελεγχος compatibility
     customer(MinSize, MinBedrooms, Pets, ElevatorFloor, MaxRent, MaxCenter, MaxSuburbs, ExtraPerM2, ExtraPerGardenM2),
     house(_, Bedrooms, Size, Center, Floor, Elevator, PetsAllowed, Garden, Rent)) :-
     Size>=MinSize,
