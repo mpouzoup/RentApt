@@ -17,6 +17,7 @@ handle_choice(0) :- writeln("Έξοδος..."), !.
 handle_choice(1) :- interactive_mode, !.
 handle_choice(2) :- batch_mode, !.
 handle_choice(3) :- auction_mode, !.
+handle_choice(_) :- writeln('Επίλεξε έναν αριθμό μεταξύ 0 έως 3!').
 
 interactive_mode :-
     writeln("Δώσε τις παρακάτω πληροφορίες:\n=============================="),
@@ -161,64 +162,114 @@ process_requests([request(Name, MinArea, MinRooms, DesiredPets, ElevatorFrom, Ma
     process_requests(Rest).
 
 auction_mode :-
-    
+    findall(Name,request(Name,_,_,_,_,_,_,_,_,_),Names), % Βρισκουμε ολα τα ονοματα πελατων
+    auction_loop(Names, [],FinalAssignments), %Loop με ολους τους πελατες
+    print_final_assignments(FinalAssignments,Names).
+
+auction_loop([],Final,Final).
+auction_loop(Names,Current,Final) :-
     findall(
-        request(Name, MinSize, MinRooms, Pets, FloorLimit, MaxRent, MaxCenter, MaxSuburb, ExtraPerM2, ExtraPerGarden),
-        request(Name, MinSize, MinRooms, Pets, FloorLimit, MaxRent, MaxCenter, MaxSuburb, ExtraPerM2, ExtraPerGarden),
-        Requests
-    ),
-    findall(
-        house(Address, Rooms, Size, Pets, Floor, Lift, Center, Garden, Rent),
-        house(Address, Rooms, Size, Pets, Floor, Lift, Center, Garden, Rent),
-        Houses
-    ),
-    auction_allocate(Requests, Houses, [], Allocations),
-    print_allocations(Requests, Allocations).
-
-print_allocations([], _).
-print_allocations([request(Name, _, _, _, _, _, _, _, _, _)|Rest], Allocations) :-
-    ( member(allocation(Name, house(Address, _, _, _, _, _, _, _, _)), Allocations) ->
-        format('O πελάτης ~w θα νοικιάσει το διαμέρισμα στην διεύθυνση: ~w~n', [Name, Address])
-    ;
-        format('O πελάτης ~w δεν θα νοικιάσει κάποιο διαμέρισμα!~n', [Name])
-    ),
-    print_allocations(Rest, Allocations).
-
-% Ενημερωμένη υλοποίηση ώστε να καταγράφει και αποτυχίες
-
-auction_allocate([], _, _, []).
-
-auction_allocate([request(Name, MinSize, MinRooms, Pets, FloorLimit, MaxRent, StartRent, _, _, _) | Rest], Houses, TakenHouses, Allocations) :-
-    exclude({TakenHouses}/[H]>>member(H, TakenHouses), Houses, RemainingHouses),
-    findall(House,
+        bid(Name,BestHouse,Offer),
         (
-            member(House, RemainingHouses),
-            House = house(_, HouseRooms, HouseSize, HousePets, HouseFloor, HouseLift, _, _, HouseRent),
-            HouseRooms >= MinRooms,
-            HouseSize >= MinSize,
-            (Pets == yes -> HousePets == yes ; true),
-            ((HouseFloor =< FloorLimit) ; (HouseLift == yes)),
-            HouseRent =< MaxRent
-            
+            member(Name,Names),
+            request(Name,MinSize,MinBedrooms, Pets,ElevatorFloor ,MaxRent,MaxCenter,MaxSuburbs, ExtraPerM2 ,ExtraPerGardenM2),
+            Customer= customer(MinSize, MinBedrooms,Pets,ElevatorFloor,MaxRent,MaxCenter,MaxSuburbs,ExtraPerM2,ExtraPerGardenM2),
+            find_compatible_houses(Customer,Houses),
+            subtract_assigned(Houses,Current,AvailableHouses),
+            AvailableHouses \= [],
+            find_best_house(AvailableHouses,BestHouse),
+            offer(Customer,BestHouse,Offer)
         ),
-        MatchingHouses
+        Bids
     ),
-    sort(9, @=<, MatchingHouses, SortedHouses),
-    (
-        SortedHouses = [BestHouse|_] ->
-            auction_allocate(Rest, Houses, [BestHouse|TakenHouses], RestAllocations),
-            Allocations = [allocation(Name, BestHouse) | RestAllocations]
-        ;
-            auction_allocate(Rest, Houses, TakenHouses, RestAllocations),
-            Allocations = [allocation(Name, none) | RestAllocations]
+    % Επιλεγουμε την καλυτερη προσφορα απο ολους τους πελατες για αυτο το loop
+    % Χρησιμοποιούμε sort(3, @>=...) ώστε να πάρουμε τη μεγαλύτερη προσφορά τερμα επανω
+    ( Bids= [] -> Final = Current ;
+        sort(3, @>=, Bids, [bid(WinnerName,WinnerHouse, _)|_]),
+        append(Current, [final_assignment(WinnerName, WinnerHouse)],NewCurrent),
+        subtract(Names, [WinnerName],NewNames),
+        auction_loop(NewNames,NewCurrent,Final)
     ).
 
-% Εκτύπωση αποτελεσμάτων σε φιλική μορφή
+subtract_assigned([], _, []).
+subtract_assigned([House|T],Assigned,R) :-
+    (member(final_assignment(_,House),Assigned) -> subtract_assigned(T,Assigned,R)
+    ; R= [House|Rest],subtract_assigned(T,Assigned,Rest)).
 
-print_allocations([]).
-print_allocations([allocation(Name, none)|T]) :-
-    format('O πελάτης ~w δεν θα νοικιάσει κάποιο διαμέρισμα!\n', [Name]),
-    print_allocations(T).
-print_allocations([allocation(Name, house(Address, _, _, _, _, _, _, _, _))|T]) :-
-    format('O πελάτης ~w θα νοικιάσει το διαμέρισμα στην διεύθυνση: ~w\n', [Name, Address]),
-    print_allocations(T).
+print_final_assignments(Assignments,AllNames) :-
+    findall(Name,member(final_assignment(Name, _),Assignments), AssignedNames),
+    % Αφαιρουμε τους πελατες που δεν εχουν παρει διαμερισμα
+    subtract(AllNames,AssignedNames,UnassignedNames),
+    print_assignments(Assignments),
+    print_unassigned(UnassignedNames).
+
+print_assignments([]).
+print_assignments([final_assignment(Name,House)|T]) :-
+    House = house(Address,_,_,_,_,_,_,_,_),
+    format('O πελάτης ~w θα νοικιάσει το διαμέρισμα στην διεύθυνση: ~w~n',[Name, Address]),
+    print_assignments(T).
+
+print_unassigned([]).
+print_unassigned([Name|T]) :-
+    format('O πελάτης ~w δεν θα νοικιάσει κάποιο διαμέρισμα!~n', [Name]),
+    print_unassigned(T).
+
+find_compatible_houses(Customer,Houses) :-  % Βρισκουμε ολα τα διαμερισματα που ειναι compatible με καθε πελατη
+    findall(
+        house(Address, Bedrooms, Size, Center, Floor, Elevator, PetsAllowed, Garden, Rent),
+        (house(Address, Bedrooms, Size, Center, Floor, Elevator, PetsAllowed, Garden, Rent),
+         compatible_house(Customer,house(Address, Bedrooms, Size, Center, Floor, Elevator, PetsAllowed, Garden, Rent))),
+        Houses).
+
+compatible_house(  %Ελεγχος compatibility
+    customer(MinSize, MinBedrooms, Pets, ElevatorFloor, MaxRent, MaxCenter, MaxSuburbs, ExtraPerM2, ExtraPerGardenM2),
+    house(_, Bedrooms, Size, Center, Floor, Elevator, PetsAllowed, Garden, Rent)) :-
+    Size>=MinSize,
+    Bedrooms>=MinBedrooms,
+    (Pets ==yes -> PetsAllowed== yes ;true),
+    (Floor>=ElevatorFloor -> Elevator== yes ;true),
+    (Center==yes -> BaseRent= MaxCenter; BaseRent=MaxSuburbs),
+    ExtraM2 is max(0,Size-MinSize),
+    ExtraM2Cost is ExtraM2*ExtraPerM2,
+    GardenCost is Garden*ExtraPerGardenM2,
+    FinalRent is BaseRent+ExtraM2Cost+GardenCost,
+    Rent=<FinalRent,
+    Rent=<MaxRent.
+
+print_houses([]).
+print_houses([house(Address, Bedrooms, Size, Center, Floor, Elevator, PetsAllowed, Garden, Rent)|T]) :-
+    format('\nΚατάλληλο σπίτι στην διεύθυνση: ~w~n', [Address]),
+    format('Υπνοδωμάτια: ~w~n', [Bedrooms]),
+    format('Εμβαδόν: ~w~n', [Size]),
+    format('Εμβαδόν κήπου: ~w~n', [Garden]),
+    format('Είναι στο κέντρο της πόλης: ~w~n', [Center]),
+    format('Επιτρέπονται κατοικίδια: ~w~n', [PetsAllowed]),
+    format('Όροφος: ~w~n', [Floor]),
+    format('Ανελκυστήρας: ~w~n', [Elevator]),
+    format('Ενοίκιο: ~w~n', [Rent]),
+    print_houses(T).
+
+
+find_best_house([House],House).
+find_best_house([H|T],Best) :-
+    find_best_house(T,BestRest),
+    better_house(H,BestRest,Best).
+
+% Συγκριση σπιτιων με βαση το ενοικιο, το μεγεθος του κηπου και το συνολικο μεγεθος
+better_house(H1,H2,H1) :- cheaper(H1,H2), !.
+better_house(H1,H2,H1) :- equal_price(H1,H2), bigger_garden(H1,H2), !.
+better_house(H1,H2,H1) :- equal_price(H1,H2), equal_garden(H1,H2), bigger_size(H1,H2), !.
+better_house(_,H2,H2).
+
+cheaper(house(_,_,_,_,_,_,_,_,Rent1),house(_,_,_,_,_,_,_,_,Rent2)) :- Rent1<Rent2.
+equal_price(house(_,_,_,_,_,_,_,_,Rent), house(_,_,_,_,_,_,_,_, Rent)).
+bigger_garden(house(_,_,_,_,_,_,_,Garden1,_),house(_,_,_,_,_,_,_,Garden2,_)) :- Garden1>Garden2.
+equal_garden(house(_,_,_,_,_,_,_,Garden,_), house(_,_,_,_,_,_,_,Garden,_)).
+bigger_size(house(_,_,Size1,_,_,_,_,_,_), house(_,_,Size2,_,_,_,_,_,_)) :- Size1>Size2.
+
+% Υπολογισμος προσφορας με βασει τις απαιτησεις του πελατη και των χαρακτηριστικων του σπιτιου
+offer(customer(MinSize,_,_,_,_,MaxCenter,MaxSuburbs,ExtraPerM2,ExtraPerGardenM2),
+      house(_,_,Size,Center,_,_,_,Garden,_),Offer) :-
+    (Center== yes -> Base=MaxCenter;Base=MaxSuburbs),
+    ExtraM2 is max(0,Size-MinSize),
+    Offer is Base + ExtraM2 * ExtraPerM2 + Garden * ExtraPerGardenM2.
