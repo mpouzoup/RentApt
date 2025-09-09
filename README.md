@@ -48,8 +48,11 @@ request(Name, MinArea, MinRooms, DesiredPets, ElevatorFrom, MaxTotal, BaseCenter
 ## Usage
 
 Terminal:
+
     -swipl
+
     -[main].
+    
     -run.
 
 Follow the interactive menu.
